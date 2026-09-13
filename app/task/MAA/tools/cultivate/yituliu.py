@@ -410,7 +410,7 @@ def normalize_dataset(
 
 
 def stage_candidates(
-    dataset: CultivateDataSet, now_ms: int | None = None
+    dataset: CultivateDataSet, now_ms: int | None = None, *, limit: int | None = 10
 ) -> dict[str, list[dict[str, Any]]]:
     """按物品聚合可刷关卡候选，按该材料的单件期望理智升序（库存保持选择器用）。
 
@@ -424,6 +424,9 @@ def stage_candidates(
 
     now_ms 提供时过滤时间窗已结束的活动关（编辑器里选了过期关会被
     MAA 直接跳过，没有意义）。
+
+    limit 截断排序去重后的候选（默认 10）：排名靠后的关单件理智全面
+    更差，下拉只留噪音；首项（自动填关结果）不受影响。传 None 取全量。
 
     资源关的固定产出材料（采购凭证 ← AP-5 等）没有概率掉落数据，按
     dataset.fixed_source_stages 直接给出唯一候选，保证选中物品后一定有
@@ -487,7 +490,7 @@ def stage_candidates(
                 continue
             seen.add(option["stage"])
             deduped.append(option)
-        candidates[item_id_key] = deduped
+        candidates[item_id_key] = deduped[:limit] if limit is not None else deduped
     return candidates
 
 
@@ -630,6 +633,77 @@ async def download_dataset(
         item_info_raw,
         data_version=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     )
+
+
+def parse_operator_catalog(raw: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """解析干员选择器目录：id/名称/稀有度/职业（一图流全量表，决策 11）。
+
+    只取展示字段，不进内核契约（CultivateDataSet 保持中性领域词汇）；
+    排序为稀有度降序、名称升序。
+    """
+
+    catalog: list[dict[str, Any]] = []
+    for char_id, entry in raw.items():
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if not char_id or not isinstance(name, str) or not name:
+            continue
+        rarity = entry.get("rarity")
+        profession = entry.get("profession")
+        catalog.append(
+            {
+                "value": char_id,
+                "label": name,
+                "rarity": rarity if isinstance(rarity, int) else 0,
+                "profession": profession if isinstance(profession, str) else "",
+            }
+        )
+    catalog.sort(key=lambda item: (-item["rarity"], item["label"]))
+    return catalog
+
+
+async def load_operator_catalog(
+    cache_dir: Path,
+    proxy: httpx.Proxy | str | None = None,
+    *,
+    timeout: float = 30.0,
+) -> list[dict[str, Any]]:
+    """加载干员选择器目录：快照直读，缺失则拉取需求表并并回快照。
+
+    目录存在快照的 ``operators`` 键，与数据集共用保鲜机制；数据集刷新
+    （write_snapshot 重写快照）会丢弃该键，下次调用自动重拉自愈。拉取
+    失败抛 YituliuDataError，由调用方兜底。
+    """
+
+    snapshot = read_snapshot(cache_dir)
+    operators = snapshot.get("operators") if isinstance(snapshot, dict) else None
+    if isinstance(operators, list) and operators:
+        return operators
+
+    try:
+        async with httpx.AsyncClient(
+            proxy=proxy, timeout=timeout, follow_redirects=True
+        ) as client:
+            response = await client.get(_DEMAND_URL)
+            response.raise_for_status()
+            raw = response.json()
+    except Exception as e:
+        raise YituliuDataError(f"干员目录拉取失败: {e}") from e
+    if not isinstance(raw, Mapping):
+        raise YituliuDataError("干员目录数据格式异常（根不是对象）")
+
+    catalog = parse_operator_catalog(raw)
+    payload = snapshot if isinstance(snapshot, dict) else {}
+    payload["operators"] = catalog
+    payload.setdefault("saved_at", time.time())
+    path = snapshot_path(cache_dir)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass  # 目录只是缓存，写失败不影响本次返回
+    return catalog
 
 
 def snapshot_path(cache_dir: Path) -> Path:

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Mapping, Protocol, runtime_checkable
+from typing import Any, Literal, Mapping, Protocol, runtime_checkable
 
 GoalKind = Literal["elite", "mastery", "module"]
 
@@ -140,10 +140,16 @@ class Achievement:
 
 @dataclass(frozen=True)
 class ProviderContext:
-    """链执行器传给各 provider 的运行时上下文（provider 本身保持无状态）。"""
+    """链执行器传给各 provider 的运行时上下文（provider 本身保持无状态）。
+
+    ``file_cache`` 供 provider 在单次编排内缓存识别文件解析结果（同目录
+    多干员多次取数只读一次磁盘）；provider 不跨调用持有状态，缓存随
+    context 生命周期走。
+    """
 
     maa_data_dir: Path | None = None  # MAA 安装目录 data/，local 适配器读取用
     manual_progressions: Mapping[str, Progression] = field(default_factory=dict)
+    file_cache: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

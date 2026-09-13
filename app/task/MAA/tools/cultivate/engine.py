@@ -148,16 +148,14 @@ def _direct_cost(
     weekday: int | None = None,
     blacklist: frozenset[str] = frozenset(),
 ) -> float | None:
-    """直刷获得 1 个物品的等效理智成本 = 物品价值 ÷ 关卡综合效率。
+    """直刷获得 1 个物品的期望理智成本 = 关卡理智 ÷ 该物品每次期望掉落。
 
-    综合效率 = Σ(每次掉落期望×物品价值)/理智，副产品按价值自动抵扣
-    （一图流综合效率口径）。取各候选关最小值；不可直刷/价值未知/今天
-    无开放关（now_ms/weekday 提供时）返回 None。
+    单件口径（副产品不抵扣），与 recommend_stages 选关判据同源——路径层
+    与定关层必须同口径，否则会出现"按 A 口径判直刷、按 B 口径定关执行"
+    的错配（综合效率口径与多目标联合折算留 P3 完整版）。取各候选关
+    最小值；今天无开放关（now_ms/weekday 提供时）返回 None。
     """
 
-    value = data.item_value.get(item_id)
-    if value is None or value <= 0:
-        return None
     best: float | None = None
     for drop in data.drops:
         if drop.item_id != item_id:
@@ -170,9 +168,9 @@ def _direct_cost(
         if weekday is not None and meta.open_weekdays is not None:
             if weekday not in meta.open_weekdays:
                 continue
-        if meta.composite <= 0:
+        if drop.expected_per_run <= 0:
             continue
-        cost = value / meta.composite
+        cost = meta.ap_cost / drop.expected_per_run
         best = cost if best is None else min(best, cost)
     return best
 
@@ -250,12 +248,11 @@ def synthesize(
     对路径选择的影响（完整口径 P3 对齐）；库存缺口由 MAA 执行时现算，
     因此条目数量取路径总量（保有量目标语义）而非扣减后的差额。
 
-    today 提供时直刷可行性按当天开放性评估——直刷关今天没开的材料自动
-    落到合成路径（例：固源岩组直刷候选全是已过期的复刻/限时节，大量需求
-    会折叠为"刷固源岩×5 合成"）；连合成路径今天也走不通的，保留为未展开
-    的刷取需求（recommend_stages 自然不产条目，demands 仍展示缺口）；
-    结构性不可获取（无直掉关且无配方）才进不可获取清单。不提供 today 则
-    不做开放性过滤（仅限测试）。
+    today 提供时直刷可行性按当天开放性评估——直刷关今天没开（限时关
+    过期/星期关未开）的材料自动落到合成路径；连合成路径今天也走不通的，
+    保留为未展开的刷取需求（recommend_stages 自然不产条目，demands 仍
+    展示缺口）；结构性不可获取（无直掉关且无配方）才进不可获取清单。
+    不提供 today 则不做开放性过滤（仅限测试）。
     """
 
     recipe_map = _build_recipe_map(data)
@@ -671,3 +668,38 @@ def apply_achievements(
         if new_goals:
             new_targets.append(OperatorTarget(target.operator_id, tuple(new_goals)))
     return new_targets
+
+
+_GOAL_LABELS: Mapping[str, str] = {
+    "elite": "精",
+    "mastery": "专精",
+    "module": "模组",
+}
+
+
+def summarize_achievements(
+    targets: list[OperatorTarget] | tuple[OperatorTarget, ...],
+    achievements: list[Achievement],
+    names: Mapping[str, str] | None = None,
+) -> list[str]:
+    """把"达成且可自证"（apply_achievements 将移除）的目标拼成用户文案。
+
+    pending_confirm（来源不可自证）不在此列：目标仍保留，仅状态流转。
+    名字映射缺失时回退 char_id；本函数只产出文本，不做任何流转。
+    """
+
+    goal_by_key = {
+        (target.operator_id, goal_index): goal
+        for target in targets
+        for goal_index, goal in enumerate(target.goals)
+    }
+    lines: list[str] = []
+    for achievement in achievements:
+        if not (achievement.achieved and achievement.confident):
+            continue
+        goal = goal_by_key.get((achievement.operator_id, achievement.goal_index))
+        if goal is None:
+            continue
+        name = (names or {}).get(achievement.operator_id, achievement.operator_id)
+        lines.append(f"{name} 已达到{_GOAL_LABELS[goal.kind]}{goal.to_level}")
+    return lines
