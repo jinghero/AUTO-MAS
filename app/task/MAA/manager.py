@@ -63,6 +63,7 @@ from .ScriptConfig import ScriptConfigTask
 from .tools import push_notification
 from .tools.backup_archive import archive_native_backup
 from .tools.game_update import ensure_game_updated
+from .tools.proxy_limit import check_daily_proxy_limit
 from .tools.resource_update import (
     acquire_resource_access_lock,
     get_resource_write_lock,
@@ -382,6 +383,14 @@ class MaaManager(ScriptManagerBase):
                     self.script_info.current_index
                 ]
                 current_config = self.user_config[uuid.UUID(current_user.user_id)]
+                reason = await check_daily_proxy_limit(
+                    self.script_config,
+                    current_config,
+                    is_queue_task=self.task_info.is_queue_task,
+                )
+                if reason is not None:
+                    await self.skip_user(current_user, reason)
+                    continue
                 update_result = self.game_update_results.get(
                     current_config.get("Info", "Server")
                 )
