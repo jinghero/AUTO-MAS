@@ -93,7 +93,7 @@ export interface OnlineAppearancePrepareResult {
   sha256?: string
   appearance?: OnlineAppearancePreview
   existing?: { id: string; name: string } | null
-  code?: OnlineAppearanceErrorCode | 'INVALID_PACKAGE'
+  code?: OnlineAppearanceErrorCode | AppearanceImportResult['code']
   error?: string
 }
 
@@ -905,7 +905,7 @@ export function createOnlineAppearanceService(
         removeQuietly(zipPath)
         if (error instanceof AppearanceError) {
           logger.warn(`在线外观包无效: ${fileKey} 版本 ${version.versionNo}，${error.message}`)
-          return { success: false, code: 'INVALID_PACKAGE', error: error.message }
+          return { success: false, code: error.code, error: error.message }
         }
         throw error
       }

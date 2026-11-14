@@ -1,3 +1,4 @@
+import type { ResourcePackageFailureCode } from '../../src/types/mascotPack'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -39,7 +40,7 @@ const zipOptions = { lazyEntries: true, validateEntrySizes: true, strictFileName
 export async function detectAssetPackageKind(zipPath: string): Promise<AssetPackageKind> {
   const stat = await fs.promises.stat(zipPath)
   if (!stat.isFile() || stat.size > ASSET_CATEGORY_LIMITS.theme.archiveBytes)
-    fail('资源 ZIP 无效或过大')
+    throw new AssetPackageError('TOO_LARGE', '资源 ZIP 无效或过大')
   const zip = await openPromise(zipPath, zipOptions)
   let hasTheme = false
   try {
@@ -50,12 +51,14 @@ export async function detectAssetPackageKind(zipPath: string): Promise<AssetPack
   } finally {
     zip.close()
   }
-  if (!hasTheme) fail('资源包根目录缺少 theme.json 或 mascot.json')
+  if (!hasTheme)
+    throw new AssetPackageError('INVALID_MANIFEST', '资源包根目录缺少 theme.json 或 mascot.json')
   return 'theme'
 }
 
 async function readEntry(zip: ZipFile, entry: Entry, limit: number): Promise<Buffer> {
-  if (entry.uncompressedSize > limit) fail('资源包清单过大')
+  if (entry.uncompressedSize > limit)
+    throw new AssetPackageError('INVALID_MANIFEST', '资源包清单过大')
   const stream = await zip.openReadStreamPromise(entry)
   const chunks: Buffer[] = []
   let size = 0
@@ -65,12 +68,13 @@ async function readEntry(zip: ZipFile, entry: Entry, limit: number): Promise<Buf
     size += data.length
     if (size > limit) {
       stream.destroy()
-      fail('资源包清单过大')
+      throw new AssetPackageError('INVALID_MANIFEST', '资源包清单过大')
     }
     checksum = crc32(data, checksum)
     chunks.push(data)
   }
-  if (size !== entry.uncompressedSize || checksum !== entry.crc32) fail('资源包清单校验失败')
+  if (size !== entry.uncompressedSize || checksum !== entry.crc32)
+    throw new AssetPackageError('CHECKSUM_MISMATCH', '资源包清单校验失败')
   return Buffer.concat(chunks, size)
 }
 
@@ -235,6 +239,7 @@ export interface PackageManifest {
 }
 
 export type PackageErrorCode =
+  | ResourcePackageFailureCode
   | 'INVALID_PACKAGE'
   | 'INVALID_ANIMATION'
   | 'DUPLICATE_ID'
@@ -359,7 +364,8 @@ export class AssetPackageStore<T extends PackageManifest> {
         files.add(entryRelative.toLowerCase())
         const stat = fs.statSync(entryPath)
         totalBytes += stat.size
-        if (totalBytes > this.limits.extractedBytes) fail('资源总大小超限')
+        if (totalBytes > this.limits.extractedBytes)
+          throw new AssetPackageError('EXTRACTION_LIMIT', '资源总大小超限')
       }
     }
     visit(directory)
@@ -386,7 +392,8 @@ export class AssetPackageStore<T extends PackageManifest> {
   async readArchive(zipPath: string, parent = os.tmpdir()): Promise<ExtractedPackage<T>> {
     const archiveStat = await fs.promises.stat(zipPath)
     if (!archiveStat.isFile()) fail('选择的路径不是文件')
-    if (archiveStat.size > this.limits.archiveBytes) fail('资源 ZIP 文件过大')
+    if (archiveStat.size > this.limits.archiveBytes)
+      throw new AssetPackageError('TOO_LARGE', '资源 ZIP 文件过大')
 
     let manifestData: Buffer | undefined
     let declaredTotal = 0
@@ -398,19 +405,25 @@ export class AssetPackageStore<T extends PackageManifest> {
         if (((entry.externalFileAttributes >>> 16) & 0xf000) === 0xa000)
           fail('ZIP 中不允许符号链接')
         if (directory) continue
-        if (!Number.isSafeInteger(entry.uncompressedSize) || entry.uncompressedSize <= 0)
-          fail(`ZIP 文件大小无效: ${name}`)
+        if (!Number.isSafeInteger(entry.uncompressedSize) || entry.uncompressedSize < 0)
+          fail(`ZIP 文件过大: ${name}`)
+        if (entry.uncompressedSize === 0) fail(`ZIP 文件为空: ${name}`)
         declaredTotal += entry.uncompressedSize
-        if (declaredTotal > this.limits.extractedBytes) fail('ZIP 解压总大小超限')
+        if (declaredTotal > this.limits.extractedBytes)
+          throw new AssetPackageError('EXTRACTION_LIMIT', 'ZIP 解压总大小超限')
         if (name === this.format.manifestName) {
-          if (manifestData) fail('ZIP 中包含重复清单')
+          if (manifestData) fail('ZIP 中包含重复文件名')
           manifestData = await readEntry(index, entry, ASSET_PACKAGE_LIMITS.manifestBytes)
         }
       }
     } finally {
       index.close()
     }
-    if (!manifestData) fail(`${this.format.manifestName} 必须在 ZIP 根目录`)
+    if (!manifestData)
+      throw new AssetPackageError(
+        'INVALID_MANIFEST',
+        `${this.format.manifestName} 必须在 ZIP 根目录`
+      )
     let manifest: T
     try {
       manifest = this.format.normalize(
@@ -424,7 +437,8 @@ export class AssetPackageStore<T extends PackageManifest> {
     }
     await fs.promises.mkdir(parent, { recursive: true })
     const space = await fs.promises.statfs(parent)
-    if (space.bavail * space.bsize < declaredTotal) fail('磁盘空间不足，无法解压资源包')
+    if (space.bavail * space.bsize < declaredTotal)
+      throw new AssetPackageError('NO_SPACE', '磁盘空间不足，无法解压资源包')
     const directory = await fs.promises.mkdtemp(path.join(parent, '.import-'))
     const files: ExtractedPackage<T>['files'] = []
     const expected = new Set(
@@ -448,7 +462,7 @@ export class AssetPackageStore<T extends PackageManifest> {
           name === this.format.manifestName &&
           entry.uncompressedSize > ASSET_PACKAGE_LIMITS.manifestBytes
         )
-          fail('资源包清单过大')
+          throw new AssetPackageError('INVALID_MANIFEST', '资源包清单过大')
         const destination = ensureWithinRoot(directory, path.join(directory, ...name.split('/')))
         await fs.promises.mkdir(path.dirname(destination), { recursive: true })
         let checksum = 0
@@ -458,7 +472,7 @@ export class AssetPackageStore<T extends PackageManifest> {
             written += chunk.length
             entryBytes += chunk.length
             if (written > this.limits.extractedBytes) {
-              callback(new AssetPackageError('INVALID_PACKAGE', 'ZIP 解压总大小超限'))
+              callback(new AssetPackageError('EXTRACTION_LIMIT', 'ZIP 解压总大小超限'))
               return
             }
             checksum = crc32(chunk, checksum)
@@ -471,10 +485,10 @@ export class AssetPackageStore<T extends PackageManifest> {
           fs.createWriteStream(destination, { highWaterMark: 64 * 1024, flags: 'wx' })
         )
         if (entryBytes !== entry.uncompressedSize || checksum !== entry.crc32)
-          fail(`ZIP 文件校验失败: ${name}`)
+          throw new AssetPackageError('CHECKSUM_MISMATCH', `ZIP 文件校验失败: ${name}`)
         if (name === this.format.manifestName) {
           if (!(await fs.promises.readFile(destination)).equals(manifestData))
-            fail('资源包清单在读取期间发生变化')
+            throw new AssetPackageError('PACKAGE_CHANGED', '资源包清单在读取期间发生变化')
         } else {
           files.push({
             path: name,
@@ -525,10 +539,12 @@ export class AssetPackageStore<T extends PackageManifest> {
       }
 
       const required = files.reduce((total, file) => total + fs.statSync(file.source).size, 0)
-      if (required > this.limits.extractedBytes) fail('资源总大小超限')
+      if (required > this.limits.extractedBytes)
+        throw new AssetPackageError('EXTRACTION_LIMIT', '资源总大小超限')
       const reuse = path.dirname(pack.directory) === root
       const space = fs.statfsSync(root)
-      if (!reuse && space.bavail * space.bsize < required) fail('磁盘空间不足，无法安装资源包')
+      if (!reuse && space.bavail * space.bsize < required)
+        throw new AssetPackageError('NO_SPACE', '磁盘空间不足，无法安装资源包')
       const temp = reuse ? pack.directory : fs.mkdtempSync(path.join(root, '.import-'))
       try {
         fs.writeFileSync(

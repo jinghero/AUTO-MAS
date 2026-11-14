@@ -1,4 +1,4 @@
-import { app, utilityProcess, type UtilityProcess } from 'electron'
+import { utilityProcess } from 'electron'
 import * as path from 'path'
 import { AssetPackageError, type PackageErrorCode } from './assetPackageService'
 import type * as Appearance from './appearanceService'
@@ -27,18 +27,13 @@ export type PackageReply =
   | { operation: 'error'; code: PackageErrorCode; error: string }
 
 let queue: Promise<unknown> = Promise.resolve()
-let active: UtilityProcess | undefined
 let quitting = false
-let quitPending = false
-app.on('before-quit', event => {
-  if (!active) return
-  event.preventDefault()
+
+/** 仅由用户确认后的退出收尾调用，等资源写入完成后才允许 Electron 退出。 */
+export async function finishAssetPackageJobs(): Promise<void> {
   quitting = true
-  if (!quitPending) {
-    quitPending = true
-    void queue.finally(() => app.quit())
-  }
-})
+  await queue
+}
 
 /** 大包只在资源进程中展开；队列同时只有一个写入者，主进程异步等待处理结果。 */
 async function run(job: PackageJob): Promise<PackageReply> {
@@ -46,14 +41,13 @@ async function run(job: PackageJob): Promise<PackageReply> {
     () =>
       new Promise<PackageReply>((resolve, reject) => {
         if (quitting) {
-          reject(new Error('应用正在退出'))
+          reject(new AssetPackageError('PROCESS_FAILED', '应用正在退出'))
           return
         }
         const child = utilityProcess.fork(path.join(__dirname, 'assetPackageWorker.js'), [], {
           serviceName: '资源包处理',
           stdio: 'ignore',
         })
-        active = child
         let reply: PackageReply | undefined
         child.once('spawn', () => child.postMessage(job))
         child.on('error', () => {
@@ -64,9 +58,8 @@ async function run(job: PackageJob): Promise<PackageReply> {
           child.kill()
         })
         child.once('exit', () => {
-          active = undefined
           if (reply) resolve(reply)
-          else reject(new AssetPackageError('IMPORT_FAILED', '资源包处理进程已退出'))
+          else reject(new AssetPackageError('PROCESS_FAILED', '资源包处理进程已退出'))
         })
       })
   )
@@ -92,7 +85,7 @@ export async function importAppearancePackage(
   userDataPath: string,
   zipPath: string,
   replace = false
-) {
+): Promise<Awaited<ReturnType<typeof Appearance.importAppearancePackage>>> {
   try {
     const reply = await run({ operation: 'import-theme', userDataPath, zipPath, replace })
     if (reply.operation !== 'import-theme') throw new Error('资源包处理结果不匹配')
@@ -100,13 +93,17 @@ export async function importAppearancePackage(
   } catch (error) {
     return {
       success: false,
-      code: 'IMPORT_FAILED' as const,
+      code: 'PROCESS_FAILED' as const,
       error: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-export async function importMascotPackage(userDataPath: string, zipPath: string, replace = false) {
+export async function importMascotPackage(
+  userDataPath: string,
+  zipPath: string,
+  replace = false
+): Promise<Awaited<ReturnType<typeof Mascot.importMascotPackage>>> {
   try {
     const reply = await run({ operation: 'import-mascot', userDataPath, zipPath, replace })
     if (reply.operation !== 'import-mascot') throw new Error('资源包处理结果不匹配')
@@ -114,7 +111,7 @@ export async function importMascotPackage(userDataPath: string, zipPath: string,
   } catch (error) {
     return {
       success: false,
-      code: 'IMPORT_FAILED' as const,
+      code: 'PROCESS_FAILED' as const,
       error: error instanceof Error ? error.message : String(error),
     }
   }

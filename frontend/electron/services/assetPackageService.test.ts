@@ -82,7 +82,9 @@ describe('外部资源 ZIP 校验', () => {
       offset = bytes.indexOf(Buffer.from('504b0102', 'hex'), offset + 4)
     }
     fs.writeFileSync(file, bytes)
-    await expect(store.readArchive(file, output)).rejects.toMatchObject({ code: 'INVALID_PACKAGE' })
+    await expect(store.readArchive(file, output)).rejects.toMatchObject({
+      code: 'EXTRACTION_LIMIT',
+    })
     expect(fs.existsSync(output)).toBe(false)
   })
 
@@ -101,7 +103,9 @@ describe('外部资源 ZIP 校验', () => {
       offset = bytes.indexOf(Buffer.from('504b0102', 'hex'), offset + 4)
     }
     fs.writeFileSync(file, bytes)
-    await expect(store.readArchive(file, output)).rejects.toMatchObject({ code: 'INVALID_PACKAGE' })
+    await expect(store.readArchive(file, output)).rejects.toMatchObject({
+      code: 'CHECKSUM_MISMATCH',
+    })
     expect(fs.readdirSync(output)).toEqual([])
   })
 })

@@ -10,6 +10,7 @@ import {
   assertString,
   fail,
   type LoadedAssetPackage,
+  type PackageErrorCode,
 } from './assetPackageService'
 import { normalizeMascot, validateMascotAssets } from './mascotManifest'
 export {
@@ -91,7 +92,7 @@ interface InstalledAppearance extends AppearanceManifest {
 interface AppearanceImportResult {
   success: boolean
   appearance?: InstalledAppearance
-  code?: 'INVALID_PACKAGE' | 'INVALID_ANIMATION' | 'DUPLICATE_ID' | 'IMPORT_FAILED' | 'UNSUPPORTED'
+  code?: PackageErrorCode
   error?: string
   existing?: InstalledAppearance
 }

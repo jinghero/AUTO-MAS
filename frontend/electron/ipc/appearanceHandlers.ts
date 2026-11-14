@@ -303,7 +303,7 @@ export function registerAppearanceHandlers(options: AppearanceHandlerOptions = {
         }
       } catch (error) {
         if (error instanceof AppearanceError) {
-          return { success: false, code: 'INVALID_PACKAGE', error: error.message }
+          return { success: false, code: error.code, error: error.message }
         }
         const code = (error as NodeJS.ErrnoException | undefined)?.code
         if (code === 'ENOENT') {

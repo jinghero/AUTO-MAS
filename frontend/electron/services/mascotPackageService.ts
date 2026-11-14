@@ -134,8 +134,8 @@ export async function importMascotPackage(
     return {
       success: false,
       code:
-        error instanceof AssetPackageError && error.code === 'INVALID_ANIMATION'
-          ? 'INVALID_ANIMATION'
+        error instanceof AssetPackageError && error.code !== 'UNSUPPORTED'
+          ? error.code
           : 'INVALID_PACKAGE',
       error: error instanceof Error ? error.message : String(error),
     }
