@@ -4710,7 +4710,7 @@
   "core.themeStore.error.expired": "一時ダウンロードの有効期限が切れました。もう一度ダウンロードしてください",
   "core.themeStore.error.network": "共有サイトに接続できません。ネットワークを確認して再試行してください",
   "core.themeStore.error.notFound": "共有サイトにこのリソースまたはバージョンが見つかりません",
-  "core.themeStore.error.tooLarge": "パッケージが 16 MB の上限を超えたため、ダウンロードを中止しました",
+  "core.themeStore.error.tooLarge": "パッケージがこのカテゴリのサイズ上限を超えたため、ダウンロードを中止しました",
   "core.themeStore.error.unsupported": "この環境ではオンラインリソースを利用できません",
   "core.themeStore.install": "このバージョンをインストール",
   "core.themeStore.installFailed": "オンラインリソースをインストールできませんでした",

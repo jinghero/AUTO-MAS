@@ -4710,7 +4710,7 @@
   "core.themeStore.error.expired": "The temporary download has expired. Download it again",
   "core.themeStore.error.network": "Cannot reach the share site. Check your network and try again",
   "core.themeStore.error.notFound": "This resource or version is not on the share site",
-  "core.themeStore.error.tooLarge": "The package exceeds the 16 MB limit; download stopped",
+  "core.themeStore.error.tooLarge": "The package exceeds the size limit for this category; download stopped",
   "core.themeStore.error.unsupported": "Online resources are not supported in this environment",
   "core.themeStore.install": "Install this version",
   "core.themeStore.installFailed": "Failed to install the online resource",

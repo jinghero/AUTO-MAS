@@ -4710,7 +4710,7 @@
   "core.themeStore.error.expired": "临时下载已失效，请重新下载",
   "core.themeStore.error.network": "无法连接分享站，请检查网络后重试",
   "core.themeStore.error.notFound": "分享站上找不到这个资源或版本",
-  "core.themeStore.error.tooLarge": "资源包超过 16 MB 上限，已停止下载",
+  "core.themeStore.error.tooLarge": "资源包超过该分类的大小上限，已停止下载",
   "core.themeStore.error.unsupported": "当前环境不支持在线资源",
   "core.themeStore.install": "安装此版本",
   "core.themeStore.installFailed": "安装在线资源失败",

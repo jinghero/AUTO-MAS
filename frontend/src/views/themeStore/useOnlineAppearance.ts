@@ -394,7 +394,6 @@ export function useOnlineAppearance(options: {
     if (selectedVersion.value?.hasCover && detailItem.value) {
       ensureCover(detailItem.value.fileKey, selectedVersionNo.value, detailItem.value.categoryKey)
     }
-    await prepareSelected()
   }
 
   const retryDetail = (): void => {
@@ -409,7 +408,8 @@ export function useOnlineAppearance(options: {
     selectedVersionNo.value = versionNo
     if (version.hasCover && detailItem.value)
       ensureCover(detailItem.value.fileKey, versionNo, detailItem.value.categoryKey)
-    void prepareSelected()
+    discardPrepared()
+    prepareError.value = null
   }
 
   const install = async (): Promise<OnlineAppearanceInstallOutcome> => {
