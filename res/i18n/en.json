@@ -4712,7 +4712,6 @@
   "core.themeStore.downloadPreview": "Download preview",
   "core.themeStore.empty": "No resource packages on the share site yet",
   "core.themeStore.error.badResponse": "The share site returned an unrecognized response",
-  "core.themeStore.error.checksum": "The download does not match the SHA-256 registered on the share site and was discarded",
   "core.themeStore.error.expired": "The temporary download has expired. Download it again",
   "core.themeStore.error.network": "Cannot reach the share site. Check your network and try again",
   "core.themeStore.error.notFound": "This resource or version is not on the share site",

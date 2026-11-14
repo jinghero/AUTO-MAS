@@ -4712,7 +4712,6 @@
   "core.themeStore.downloadPreview": "プレビューをダウンロード",
   "core.themeStore.empty": "共有サイトにはまだリソースパッケージがありません",
   "core.themeStore.error.badResponse": "共有サイトから認識できない応答が返されました",
-  "core.themeStore.error.checksum": "ダウンロード内容が共有サイトに登録された SHA-256 と一致しないため、破棄しました",
   "core.themeStore.error.expired": "一時ダウンロードの有効期限が切れました。もう一度ダウンロードしてください",
   "core.themeStore.error.network": "共有サイトに接続できません。ネットワークを確認して再試行してください",
   "core.themeStore.error.notFound": "共有サイトにこのリソースまたはバージョンが見つかりません",

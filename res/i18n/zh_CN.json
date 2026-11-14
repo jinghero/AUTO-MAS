@@ -4712,7 +4712,6 @@
   "core.themeStore.downloadPreview": "下载预览",
   "core.themeStore.empty": "分享站上还没有资源包",
   "core.themeStore.error.badResponse": "分享站返回了无法识别的内容",
-  "core.themeStore.error.checksum": "下载内容与分享站登记的 SHA-256 不一致，已丢弃",
   "core.themeStore.error.expired": "临时下载已失效，请重新下载",
   "core.themeStore.error.network": "无法连接分享站，请检查网络后重试",
   "core.themeStore.error.notFound": "分享站上找不到这个资源或版本",
